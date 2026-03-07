@@ -7,5 +7,6 @@ this OS is as most as possible based on python. it can contain many bugs as the 
 # latest update
 build 000.001
 - added an bootloader
+- added an hardware check
 
 # ENJOY!
