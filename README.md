@@ -11,5 +11,8 @@ bootloader (0.00.00.01):
 - added an hang-routine, this will cause that the bootloader won't stop for no reason
 - added an start message
 - bootsector is now 510 bytes
-
+- fixed an issue that the bootloader can cause stack overflow if there is an error
+- stack moved to 0x9000 from 0x7C00 (security reasons)
+- printfunction is now safe
+- startup message changed
 # ENJOY!
