@@ -5,14 +5,7 @@ this OS is in pre-alpha development, you can experience bugs and errors. we're w
 this OS is as most as possible based on python. it can contain many bugs as the OS is in pre-alpha development.
 # EVERY WEEK 1 UPDATE!
 # latest update (17-3-2026)
-build 000.002
-bootloader (0.00.00.01):
-- added an start section: this will initialize all needed features for the start of the kernel from NexoOS!
-- added an hang-routine, this will cause that the bootloader won't stop for no reason
-- added an start message
-- bootsector is now 510 bytes
-- fixed an issue that the bootloader can cause stack overflow if there is an error
-- stack moved to 0x9000 from 0x7C00 (security reasons)
-- printfunction is now safe
-- startup message changed
+build 000.003
+bootloader (0.00.00.02):
+- several bugfixes & improvements
 # ENJOY!
