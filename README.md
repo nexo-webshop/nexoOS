@@ -12,11 +12,13 @@ Bootloader (0.00.00.03):
 - fixed a bug where the SP was risky.
 - fixed a bug where segment registers were potentially dangerous after an interrupt.
 - fixed a bug that there was no bootloader detection.
-Bootloader stage 2 (0.00.00.01)
+Bootloader stage 2 (0.00.00.02)
 - fixed a bug that stack overflow was possible
 - fixed a bug where the padding was wrongly calculated
 - the A20 line wasn't activated
 - fixed a bug that the GDT wasn't loaded
+Bootloader stage 3 (0.00.00.01)
+- initial release
 # ENJOY!
 
 # the size of our OS:
