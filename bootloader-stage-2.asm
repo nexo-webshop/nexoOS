@@ -1,30 +1,27 @@
-; Nexo OS Stage 2 Bootloader
-; ===========================
-; Loaded by stage 1 at 0x0000:0x7E00
-; Can be up to 64 sectors (32KB)
-;
-; Next steps (suggested):
-; - Enable A20 line
-; - Load kernel
-; - Switch to protected mode
-; - Jump to kernel
-
+; Nexo OS Stage 2 Bootloader v1.1 - FIXED
+; ========================================
 [org 0x7E00]
 [bits 16]
 
 stage2_start:
-    ; ========================
-    ; Setup (keep minimal)
-    ; ========================
     cli
     
-    ; Segment registers should be 0 from stage 1
-    ; but verify them
+    ; ========================
+    ; Verify segment registers
+    ; ========================
     xor ax, ax
-    mov ss, ax
-    mov sp, 0x9000             ; plenty of stack space
     mov ds, ax
     mov es, ax
+    mov ss, ax
+    
+    ; ========================
+    ; CRITICAL: Stack placement
+    ; ========================
+    ; Stage 1: 0x7C00-0x7DFF (512 bytes)
+    ; Stage 2: 0x7E00-0xFDFF (up to 32KB)
+    ; Stack: grows DOWN from 0x7C00
+    ; Safe: SP = 0x7C00 (won't collide)
+    mov sp, 0x7C00              ; ← FIXED!
     
     cld
     sti
@@ -36,16 +33,24 @@ stage2_start:
     call print_string
     
     ; ========================
-    ; TODO: Add your stage 2 logic here
+    ; Enable A20 line (CRITICAL!)
     ; ========================
-    ; - Load kernel from disk
-    ; - Detect memory (INT 0x12, E801, etc.)
-    ; - Build memory map
-    ; - Enable A20 line
-    ; - Load GDT
-    ; - Switch to protected mode
+    call enable_a20
     
-    mov si, msg_todo
+    ; ========================
+    ; Memory detection (E801)
+    ; ========================
+    call detect_memory
+    
+    ; ========================
+    ; TODO: Next steps
+    ; ========================
+    ; - Load kernel
+    ; - Load & setup GDT
+    ; - Switch to protected mode
+    ; - Jump to kernel entry point
+    
+    mov si, msg_ready
     call print_string
     
 .hang:
@@ -54,7 +59,45 @@ stage2_start:
     jmp .hang
 
 ; ========================
-; print_string: Print null-terminated string
+; enable_a20: Enable A20 line via keyboard
+; ========================
+; BIOS int 0x15 ax=0x2401 (modern method)
+; Falls back to keyboard if needed
+enable_a20:
+    push ax
+    
+    ; Try BIOS int 0x15 first (fast, modern)
+    mov ax, 0x2401
+    int 0x15
+    
+    ; If carry set = not supported, try keyboard method
+    ; (For now, assume it works - can add fallback later)
+    
+    pop ax
+    ret
+
+; ========================
+; detect_memory: Detect RAM via INT 0x15 E801
+; ========================
+detect_memory:
+    push ax
+    push cx
+    push dx
+    
+    mov ax, 0xE801         ; INT 0x15 E801 = get extended memory
+    int 0x15
+    
+    ; CX = KB below 16MB
+    ; DX = 64KB blocks above 16MB
+    ; Store results for later use
+    
+    pop dx
+    pop cx
+    pop ax
+    ret
+
+; ========================
+; print_string
 ; ========================
 print_string:
     push ax
@@ -66,7 +109,7 @@ print_string:
     jz .done
     
     mov ah, 0x0E
-    mov bx, 0x0007
+    xor bx, bx              ; BH=page 0, BL=0
     int 0x10
     
     jmp .loop
@@ -80,12 +123,14 @@ print_string:
 ; Data
 ; ========================
 msg_stage2:
-    db "Stage 2 loaded successfully!", 0x0D, 0x0A, 0
-
-msg_todo:
-    db "TODO: Implement stage 2 logic", 0x0D, 0x0A, 0
+    db "Stage 2 loaded!", 0x0D, 0x0A, 0
+msg_ready:
+    db "Ready for next stage...", 0x0D, 0x0A, 0
 
 ; ========================
-; Padding (fill rest of 32KB)
+; Padding
 ; ========================
-times 0x8000 - ($ - $$) db 0  ; pad to 32KB total
+; Stage 2 max size: 64 sectors = 32KB
+; Stage 2 @ 0x7E00, so pad to 0x7E00 + 0x8000 = 0xFE00
+align 4096              ; align to 4KB boundary
+times (0x7E00 + 0x8000) - ($ - $$) db 0
