@@ -6,8 +6,8 @@ this OS is as most as possible based on python. it can contain many bugs as the 
 # EVERY WEEK 1 UPDATE!
 # latest update (17-3-2026)
 build 000.003
-bootloader (0.00.00.02):
+Bootloader (0.00.00.02):
 - several bugfixes & improvements
-bootloader stage 2 (0.00.00.01)
+Bootloader stage 2 (0.00.00.01)
 - main release
 # ENJOY!
