@@ -17,10 +17,14 @@ Bootloader (0.00.00.04):
 - fixed a bug where the cursor wasn't initialized
 
 Bootloader stage 2 (0.00.00.02)
-- fixed a bug that stack overflow was possible
-- fixed a bug where the padding was wrongly calculated
-- the A20 line wasn't activated
-- fixed a bug that the GDT wasn't loaded
+- fixed a bug where the A20 line had an infinite timeout
+- fixed a bug where there was no fallback handling
+- fixed a bug where there was no saved memory
+- fixed a bug where the memory detection didn't make comments
+- fixed a bug where the padding calculation was wrong
+- fixed a bug where the cursor was trash on the screen
+- fixed a bug where there was no CR/LF handling
+- fixed a bug where the A20 method was unknown
 
 Bootloader stage 3 (0.00.00.01)
 - initial release
