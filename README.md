@@ -18,3 +18,6 @@ Bootloader stage 2 (0.00.00.01)
 - the A20 line wasn't activated
 - fixed a bug that the GDT wasn't loaded
 # ENJOY!
+
+# the size of our OS:
+- 39.8KB
