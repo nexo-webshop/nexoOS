@@ -1,81 +1,78 @@
-; Nexo OS Bootloader v1.1 (safe edition) - FIXED
+; Nexo OS Bootloader v1.2 (ultra-safe) - IMPROVED
 ; ===============================================
-; x86 Real Mode 16-bit bootloader
-; Loads at 0x0000:0x7C00
-
 [org 0x7C00]
 [bits 16]
 
 start:
-    cli                     ; disable interrupts (FIRST!)
+    cli                     ; EERSTE: disable interrupts
     
     ; ========================
     ; Register initialization
     ; ========================
-    xor ax, ax              ; AX = 0
-    mov ds, ax              ; DS = 0 (data segment)
-    mov es, ax              ; ES = 0 (extra segment)
+    xor ax, ax
+    mov ds, ax              ; DS = 0
+    mov es, ax              ; ES = 0
+    mov ss, ax              ; SS = 0
     
     ; ========================
-    ; Stack setup (BEFORE sti!)
+    ; Stack setup CRITICAL!
     ; ========================
-    ; CRITICAL: Set up stack BEFORE enabling interrupts
-    ; Otherwise interrupt handler has nowhere to push return address
-    mov ss, ax              ; SS = 0 (stack segment)
-    mov sp, 0x7C00          ; SP = 0x7C00 (grows downward, safe zone)
+    ; SAFE: groeit van 0x7BFE naar beneden
+    ; BIOS data zone begint pas rond 0x400
+    mov sp, 0x7C00          ; Stack boven bootloader
     
     ; ========================
-    ; Flags & interrupt setup
+    ; Flags & interrupts
     ; ========================
-    cld                     ; clear Direction Flag (string ops go forward)
-    sti                     ; enable interrupts (NOW it's safe!)
+    cld                     ; DF = 0 (forward string ops)
+    sti                     ; NOW enable interrupts
     
     ; ========================
     ; Print startup message
     ; ========================
-    mov si, message         ; SI = offset of message string
-    call print_string       ; print it
+    mov si, message
+    call print_string
     
     ; ========================
-    ; Idle loop (wait for system)
+    ; Main loop
     ; ========================
 hang:
-    cli                     ; disable interrupts
-    hlt                     ; halt CPU (low power)
-    jmp hang                ; infinite loop (shouldn't reach, but safety)
+    cli
+    hlt
+    jmp hang
 
 ; ========================
-; print_string: Print null-terminated string
+; print_string: output string
+; Input:  DS:SI -> null-terminated string
+; Clobber: AL, AH, SI
 ; ========================
-; Input:  DS:SI -> string
-; Output: none
-; Uses:   AL, AH, SI
 print_string:
-    push ax                 ; save AX (good practice)
+    push ax
+    push bx
     
 .next_char:
-    lodsb                   ; load AL = [DS:SI], SI++  (atomic instruction)
-    test al, al             ; check if AL == 0 (null terminator)
-    jz .done                ; if zero, we're done
+    lodsb                   ; AL = [DS:SI++]
+    test al, al             ; check null
+    jz .done
     
-    mov ah, 0x0E            ; BIOS function: write character in TTY mode
-    mov bx, 0x0007          ; BH = page 0, BL = color (white on black)
-    int 0x10                ; BIOS video interrupt
+    mov ah, 0x0E            ; TTY write
+    xor bx, bx              ; BX = 0 (page 0, no color override)
+    int 0x10
     
-    jmp .next_char          ; continue to next character
+    jmp .next_char
     
 .done:
-    pop ax                  ; restore AX
-    ret                     ; return to caller
+    pop bx
+    pop ax
+    ret
 
 ; ========================
-; Data section
+; Data
 ; ========================
 message db "Nexo OS secure boot...", 0x0D, 0x0A, "Ready.", 0
 
 ; ========================
-; Padding and boot signature
+; Boot sector
 ; ========================
-; Bootloader must be exactly 512 bytes with signature at bytes 510-511
-times 510 - ($ - $$) db 0  ; fill remaining space with zeros
-dw 0xAA55                   ; x86 boot signature (little-endian: 0x55AA)
+times 510 - ($ - $$) db 0
+dw 0xAA55
