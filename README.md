@@ -22,4 +22,4 @@ Bootloader stage 3 (0.00.00.01)
 # ENJOY!
 
 # the size of our OS:
-- 39.8KB
+- 18KB
