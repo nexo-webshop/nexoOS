@@ -7,11 +7,14 @@ this OS is as most as possible based on python. it can contain many bugs as the 
 - 100% assembly
 # EVERY WEEK SEVERAL UPDATES!
 # latest update (21/3/2026)
-build 000.003
-Bootloader (0.00.00.03):
-- fixed a bug where the SP was risky.
-- fixed a bug where segment registers were potentially dangerous after an interrupt.
-- fixed a bug that there was no bootloader detection.
+build 000.004
+Bootloader (0.00.00.04):
+- fixed a bug where the video mode was undefined
+- fixed a bug where there was screen content garbage
+- fixed a bug where the newline handling was broken
+- fixed a bug where CPUID crashed at old CPU's
+- fixed a bug where the BPB was missing
+- fixed a bug where the cursor wasn't initialized
 Bootloader stage 2 (0.00.00.02)
 - fixed a bug that stack overflow was possible
 - fixed a bug where the padding was wrongly calculated
