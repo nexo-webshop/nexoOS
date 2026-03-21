@@ -15,11 +15,13 @@ Bootloader (0.00.00.04):
 - fixed a bug where CPUID crashed at old CPU's
 - fixed a bug where the BPB was missing
 - fixed a bug where the cursor wasn't initialized
+
 Bootloader stage 2 (0.00.00.02)
 - fixed a bug that stack overflow was possible
 - fixed a bug where the padding was wrongly calculated
 - the A20 line wasn't activated
 - fixed a bug that the GDT wasn't loaded
+
 Bootloader stage 3 (0.00.00.01)
 - initial release
 # ENJOY!
