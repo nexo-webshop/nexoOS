@@ -6,7 +6,7 @@ this OS is as most as possible based on python. it can contain many bugs as the 
 # current state of the OS
 - 100% assembly
 # EVERY WEEK 1 UPDATE!
-# latest update (17-3-2026)
+# latest update (21/3/2026)
 build 000.003
 Bootloader (0.00.00.03):
 - fixed a bug where the SP was risky.
