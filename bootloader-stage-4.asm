@@ -1,129 +1,169 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; nexoOS Bootloader Stage 4
+; nexoOS BOOTLOADER STAGE 4 - VERSION 2
 ; ============================================================================
-; Purpose: Final bootloader stage
-;   - Load kernel from disk
-;   - Switch to protected mode (32-bit)
-;   - Setup GDT and IDT
-;   - Jump to kernel entry point
+; 
+; PURPOSE:
+;   ✓ Load kernel.bin from disk (LBA-based)
+;   ✓ Enable A20 address line (access memory > 1MB)
+;   ✓ Setup Global Descriptor Table (GDT)
+;   ✓ Switch to 32-bit protected mode
+;   ✓ Jump to kernel.bin entry point
 ;
-; Context: Runs after stage 3 in real mode (16-bit)
-; Assumptions: 
-;   - Stage 3 left us at ~0x2000 (or configurable STAGE3_BASE)
-;   - We have access to BIOS services (int 13h for disk read)
-;   - Kernel is at fixed disk location (LBA block)
+; MEMORY MAP:
+;   0x00000-0x07BFF : Real mode / BIOS / available
+;   0x07C00-0x07DFF : Stage 1 Bootloader (MBR) - 512 bytes
+;   0x07E00-0x1FFFF : Available
+;   0x02000-0x0FFFF : Stage 4 execution area
+;   0x10000-0x27FFF : ⭐ KERNEL LOADED HERE (kernel.bin) - 64KB
+;   0x28000+        : Available for kernel use
+;
+; EXECUTION CONTEXT:
+;   - Called from Stage 3 bootloader (usually at 0x2000:0x0000)
+;   - Real mode (16-bit), interrupts disabled
+;   - Stack at 0x2FFF0 downward
+;   - BIOS services available (INT 13h for disk, INT 10h for video)
+;
+; DISK LAYOUT:
+;   LBA 0        : MBR (Stage 1) - 512 bytes
+;   LBA 1-7      : Available (for Stage 2/3)
+;   LBA 8-135    : kernel.bin (128 blocks = 64KB) ⭐
+;   LBA 136+     : Filesystem / data
+;
 ; ============================================================================
 
-[BITS 16]
-[ORG 0x2000]  ; Stage 4 starts here (after stage 3)
+[BITS 16]                           ; 16-bit real mode
+[ORG 0x2000]                        ; Loaded at 0x2000 by Stage 3
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; CONSTANTS & CONFIGURATION
+; CONFIGURATION - Customize for your system
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-KERNEL_LBA_START    equ 8              ; Kernel starts at LBA block 8
-KERNEL_SIZE_BLOCKS  equ 128            ; Kernel is 128 blocks (64KB)
-KERNEL_LOAD_ADDR    equ 0x10000        ; Load kernel at 64KB (0x10000)
+KERNEL_LBA_START    equ 8              ; kernel.bin starts at LBA 8
+KERNEL_SIZE_BLOCKS  equ 128            ; kernel.bin size: 128 * 512 = 64KB
+KERNEL_LOAD_ADDR    equ 0x10000        ; Physical address 0x10000 (64KB)
+KERNEL_SEGMENT      equ 0x1000         ; Segment for loading (0x1000:0x0000 = 0x10000)
 
-KERNEL_ENTRY_ADDR   equ 0x10000        ; Kernel entry point (same as load addr)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; GDT CONFIGURATION
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 GDT_LIMIT           equ gdt_end - gdt_start - 1
-IDT_LIMIT           equ 255            ; IDT limit (256 entries)
+GDT_CODE_SELECTOR   equ 0x08            ; Code segment selector
+GDT_DATA_SELECTOR   equ 0x10            ; Data segment selector
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; ENTRY POINT
+; STAGE 4 ENTRY POINT
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 stage4_start:
     cli                             ; Disable interrupts
     cld                             ; Clear direction flag
     
-    ; Setup temporary stack
+    ; Setup temporary stack (real mode)
     mov ax, 0x2000
     mov ss, ax
     mov sp, 0xFFF0                  ; Stack from 0x2FFF0 downward
     
-    call print_msg
-    db "nexoOS Stage 4: Loading kernel...", 0x0D, 0x0A, 0x00
+    ; === STEP 1: Print boot messages ===
+    call print_string
+    db 13, 10, "=================================", 13, 10, 0
     
-    ; Load kernel from disk
-    call load_kernel
+    call print_string
+    db "nexoOS Stage 4 Bootloader", 13, 10, 0
     
+    call print_string
+    db "Loading kernel.bin...", 13, 10, 0
+    
+    ; === STEP 2: Load kernel.bin from disk ===
+    call load_kernel_from_disk
     cmp al, 0
-    jne .kernel_load_failed
+    jne .kernel_load_error
     
-    call print_msg
-    db "nexoOS Stage 4: Kernel loaded successfully!", 0x0D, 0x0A, 0x00
+    call print_string
+    db "✓ Kernel loaded at 0x10000", 13, 10, 0
     
-    call print_msg
-    db "nexoOS Stage 4: Switching to protected mode...", 0x0D, 0x0A, 0x00
+    ; === STEP 3: Enable A20 address line ===
+    call print_string
+    db "Enabling A20 line...", 13, 10, 0
     
-    ; Prepare for protected mode transition
-    call setup_protected_mode
+    call enable_a20_line
     
-    ; Switch to protected mode
+    call print_string
+    db "✓ A20 line enabled", 13, 10, 0
+    
+    ; === STEP 4: Setup GDT ===
+    call print_string
+    db "Setting up GDT...", 13, 10, 0
+    
+    lgdt [gdt_descriptor]
+    
+    call print_string
+    db "✓ GDT loaded", 13, 10, 0
+    
+    ; === STEP 5: Switch to protected mode ===
+    call print_string
+    db "Entering protected mode...", 13, 10, 0
+    
     call switch_to_protected_mode
     
-    ; *** We should never reach here in real mode ***
+    ; Should never return here (we enter protected mode)
     jmp $
-    
-.kernel_load_failed:
-    call print_msg
-    db "ERROR: Failed to load kernel!", 0x0D, 0x0A, 0x00
+
+.kernel_load_error:
+    call print_string
+    db 13, 10, "ERROR: Failed to load kernel!", 13, 10, 0
     jmp $
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; KERNEL LOADING FROM DISK (INT 13h LBA READ)
+; FUNCTION: Load kernel.bin from disk via LBA
+;
+; Uses INT 13h function 0x42 (Extended LBA Read)
+; Returns: AL = 0 (success) or AL != 0 (failure)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-load_kernel:
+load_kernel_from_disk:
     push bp
     mov bp, sp
     push bx
     push cx
     push dx
     push si
-    push di
     
-    ; Setup Disk Address Packet (DAP) for LBA read
-    ; Format:
-    ;   Offset 0: Size of DAP (16 bytes)
-    ;   Offset 1: Reserved (0)
-    ;   Offset 2: Number of sectors to read (word)
-    ;   Offset 4: Buffer offset (word)
-    ;   Offset 6: Buffer segment (word)
-    ;   Offset 8: LBA address (dword)
-    ;   Offset 12: LBA high part (dword) - for > 2TB
+    ; === Build Disk Address Packet (DAP) ===
+    ; DAP Structure (16 bytes):
+    ;   +0: size (16)
+    ;   +1: reserved (0)
+    ;   +2-3: number of sectors
+    ;   +4-5: buffer offset
+    ;   +6-7: buffer segment
+    ;   +8-11: LBA low
+    ;   +12-15: LBA high
     
-    mov byte [dap_size], 16          ; DAP size
-    mov byte [dap_reserved], 0       ; Reserved
-    mov word [dap_sectors], KERNEL_SIZE_BLOCKS  ; Number of sectors
-    
-    ; Set buffer address (0x1000:0x0000 -> physical 0x10000)
+    mov byte [dap_size], 16
+    mov byte [dap_reserved], 0
+    mov word [dap_sectors], KERNEL_SIZE_BLOCKS
     mov word [dap_buffer_off], 0x0000
-    mov word [dap_buffer_seg], 0x1000
-    
-    ; Set LBA start address
+    mov word [dap_buffer_seg], KERNEL_SEGMENT
     mov dword [dap_lba_low], KERNEL_LBA_START
-    mov dword [dap_lba_high], 0      ; High 32 bits of LBA
+    mov dword [dap_lba_high], 0
     
-    ; Call INT 13h, function 42h (Extended LBA Read)
-    mov ah, 0x42                     ; Read LBA
-    mov dl, 0x80                     ; Drive 0x80 (first hard disk)
-    mov si, dap                      ; DS:SI -> DAP
+    ; === Call INT 13h, Function 0x42 ===
+    mov ah, 0x42                    ; Extended read function
+    mov dl, 0x80                    ; Drive 0x80 (first hard disk / USB)
+    mov si, dap                     ; DS:SI -> DAP structure
     int 0x13
     
+    ; Check result
     jnc .load_success
     
-    ; If carry flag set, load failed
-    mov al, 1
-    jmp .load_exit
+    ; Carry flag set = error
+    mov al, 1                       ; Error code
+    jmp .load_done
     
 .load_success:
-    mov al, 0
+    mov al, 0                       ; Success
     
-.load_exit:
-    pop di
+.load_done:
     pop si
     pop dx
     pop cx
@@ -132,224 +172,214 @@ load_kernel:
     ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; SETUP PROTECTED MODE (GDT, IDT, ENABLE A20)
+; FUNCTION: Enable A20 address line
+;
+; Method: Keyboard Controller (most reliable)
+; Allows access to memory addresses beyond 1MB (bit 20 and above)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-setup_protected_mode:
-    push bp
-    mov bp, sp
-    
-    ; Enable A20 line (keyboard controller method)
-    call enable_a20
-    
-    ; Load GDT
-    lgdt [gdt_descriptor]
-    
-    ; Load temporary IDT (will be replaced by kernel)
-    lidt [idt_descriptor]
-    
-    pop bp
-    ret
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; ENABLE A20 ADDRESS LINE (Keyboard Controller)
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-enable_a20:
+enable_a20_line:
     push ax
     
-    ; Disable interrupts during A20 setup
-    cli
-    
-    ; Read keyboard controller status
-    mov al, 0xAD                     ; Disable keyboard
+    ; Disable keyboard
+    call .wait_input_empty
+    mov al, 0xAD                    ; Keyboard disable command
     out 0x64, al
     
     ; Read controller output port
-    mov al, 0xD0
+    call .wait_input_empty
+    mov al, 0xD0                    ; Read output port command
     out 0x64, al
     
-    ; Wait for data
-    mov cx, 0x10000
-.wait_read:
-    in al, 0x64
-    test al, 0x01
-    jnz .read_ok
-    loop .wait_read
+    call .wait_output_full
+    in al, 0x60                     ; Read output port data
+    push ax                         ; Save it
     
-.read_ok:
-    in al, 0x60                      ; Read data
-    push ax
-    
-    ; Write controller output port
-    mov al, 0xD1
+    ; Write output port with A20 bit set
+    call .wait_input_empty
+    mov al, 0xD1                    ; Write output port command
     out 0x64, al
     
-    ; Wait for write
-    mov cx, 0x10000
-.wait_write:
-    in al, 0x64
-    test al, 0x02
-    jz .write_ok
-    loop .wait_write
-    
-.write_ok:
-    pop ax
-    or al, 0x02                      ; Set A20 bit
-    out 0x60, al
+    call .wait_input_empty
+    pop ax                          ; Restore data
+    or al, 0x02                     ; Set bit 1 (A20)
+    out 0x60, al                    ; Write back
     
     ; Re-enable keyboard
-    mov al, 0xAE
+    call .wait_input_empty
+    mov al, 0xAE                    ; Keyboard enable command
     out 0x64, al
     
     pop ax
     ret
+    
+.wait_input_empty:
+    push ax
+    mov cx, 0x10000
+.wait_input_loop:
+    in al, 0x64                     ; Read keyboard status
+    test al, 0x02                   ; Check input buffer full bit
+    jz .wait_input_ok
+    loop .wait_input_loop
+.wait_input_ok:
+    pop ax
+    ret
+    
+.wait_output_full:
+    push ax
+    mov cx, 0x10000
+.wait_output_loop:
+    in al, 0x64                     ; Read keyboard status
+    test al, 0x01                   ; Check output buffer full bit
+    jnz .wait_output_ok
+    loop .wait_output_loop
+.wait_output_ok:
+    pop ax
+    ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; SWITCH TO PROTECTED MODE
+; FUNCTION: Switch to 32-bit protected mode
+;
+; This function:
+;   1. Sets CR0.PE bit (Protected Enable)
+;   2. Does far jump to flush pipeline and load CS with code segment
+;   3. Enters 32-bit protected mode code
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 switch_to_protected_mode:
-    push bp
-    mov bp, sp
-    
-    ; Disable interrupts
+    ; Disable interrupts (already done, but be safe)
     cli
     
-    ; Set PE bit in CR0 to enable protected mode
+    ; Set CR0.PE (Protected Mode Enable) bit
     mov eax, cr0
-    or eax, 0x00000001              ; Set PE (bit 0)
+    or eax, 0x00000001              ; Set PE bit
     mov cr0, eax
     
-    ; Far jump to flush pipeline and enter protected mode
-    ; This jumps to 0x08:protected_mode_start
-    db 0xEA                         ; JMP FAR opcode
-    dw protected_mode_start
-    dw 0x0008                       ; Code segment selector (GDT offset 0x08)
+    ; Far jump to 32-bit code
+    ; This flushes CPU pipeline and loads new code segment selector
+    db 0xEA                         ; JMP FAR (absolute far jump)
+    dw protected_mode_code          ; Offset in protected mode
+    dw GDT_CODE_SELECTOR            ; Selector (0x08 = code segment)
     
-    ; We should never return here
+    ; Never reached
     jmp $
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; PROTECTED MODE CODE (32-bit)
+; 32-BIT PROTECTED MODE CODE
+; ============================================================================
+; From here on, CPU is in 32-bit protected mode
+; We're running at privilege level 0 (kernel mode)
+; GDT is loaded and functional
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 [BITS 32]
 
-protected_mode_start:
-    ; Setup segment registers with data segment selector (0x10 = GDT offset 0x10)
-    mov ax, 0x10                    ; Data segment selector
+protected_mode_code:
+    ; === Setup segment registers ===
+    mov ax, GDT_DATA_SELECTOR       ; 0x10 = data segment
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     mov ss, ax
     
-    ; Setup new stack in protected mode
-    mov esp, 0x20000                ; Stack at 128KB
+    ; === Setup new stack for protected mode ===
+    mov esp, 0x20000                ; Stack at 128KB (plenty of space)
     
-    ; Clear screen (optional, if video mode available)
-    ; For now, just proceed to kernel
+    ; === Print message that we're in protected mode ===
+    ; (Optional - requires real video/serial output code)
+    ; For now, we'll skip this to avoid complexity
     
-    ; *** JUMP TO KERNEL ENTRY POINT ***
-    ; Kernel is loaded at KERNEL_LOAD_ADDR (0x10000)
+    ; === Jump to kernel ===
+    ; kernel.bin is loaded at 0x10000
+    ; We do a far jump with code segment selector
     
-    jmp 0x08:0x10000                ; Far jump to kernel with code segment
+    jmp GDT_CODE_SELECTOR:KERNEL_LOAD_ADDR
     
-    ; Should never return
+    ; If kernel returns (it shouldn't), halt
     hlt
     jmp $
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; UTILITY: PRINT MESSAGE (16-bit real mode)
+; FUNCTION: Print string (16-bit real mode only)
+;
+; Call: call print_string
+;       db "text", 0
+;       (next instruction)
+;
+; Uses: BIOS INT 10h (video output)
+; Modifies: AX, BX, SI
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-print_msg:
-    ; Call convention: address of message on stack (from CALL print_msg)
-    pop si                          ; Get message address
+print_string:
+    pop si                          ; Get return address (string pointer)
     
 .print_loop:
-    lodsb                           ; Load byte from [DS:SI]
+    lodsb                           ; Load byte from [DS:SI], increment SI
     test al, al                     ; Check for null terminator
     jz .print_done
     
-    cmp al, 0x0A                    ; Check for newline
-    je .print_newline
-    
     mov ah, 0x0E                    ; BIOS teletype output
-    mov bh, 0                       ; Page number
-    int 0x10
-    jmp .print_loop
-    
-.print_newline:
-    mov ah, 0x0E
-    mov al, 0x0D                    ; Carriage return
-    int 0x10
-    mov al, 0x0A                    ; Line feed
-    mov ah, 0x0E
+    mov bh, 0                       ; Page 0
     int 0x10
     jmp .print_loop
     
 .print_done:
-    jmp si                          ; Return to caller
+    jmp si                          ; Jump back to caller
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; DISK ADDRESS PACKET (DAP) for LBA Read
+; DATA STRUCTURES & TABLES
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; === Disk Address Packet (DAP) for LBA Read ===
 dap:
-    dap_size:       db 0x10         ; Size of DAP
-    dap_reserved:   db 0            ; Reserved
-    dap_sectors:    dw 0            ; Sectors to read
-    dap_buffer_off: dw 0            ; Buffer offset
-    dap_buffer_seg: dw 0            ; Buffer segment
-    dap_lba_low:    dd 0            ; LBA low 32 bits
-    dap_lba_high:   dd 0            ; LBA high 32 bits
+    dap_size:       db 0x10         ; Size of DAP structure (16 bytes)
+    dap_reserved:   db 0            ; Reserved byte
+    dap_sectors:    dw 0            ; Number of sectors to read
+    dap_buffer_off: dw 0            ; Offset of transfer buffer
+    dap_buffer_seg: dw 0            ; Segment of transfer buffer
+    dap_lba_low:    dd 0            ; LBA address (low 32 bits)
+    dap_lba_high:   dd 0            ; LBA address (high 32 bits)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; GLOBAL DESCRIPTOR TABLE (GDT)
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; === Global Descriptor Table (GDT) ===
+; GDT entries are 8 bytes each
+; Format: [Base 15:0] [Limit 15:0] [Base 23:16] [Access] [Limit 19:16] [Base 31:24]
 
-align 8
+align 8, db 0
 gdt_start:
-    ; Null descriptor (required)
+    ; Null descriptor (required by architecture)
     dq 0x0000000000000000
     
     ; Code segment descriptor
-    ; Base: 0x00000000, Limit: 0xFFFFF, Present, Ring 0, Code/Read
+    ; Base: 0x00000000, Limit: 0xFFFFF (4GB with 4K pages)
+    ; Present=1, DPL=00 (ring 0), Type=1 (code/data)
+    ; Executable=1, Readable=1, Access=1
+    ; Granularity=1 (4K), Default=1 (32-bit)
+    ; Binary: 00CF 9A00 0000 FFFF
     dq 0x00CF9A000000FFFF
     
     ; Data segment descriptor
-    ; Base: 0x00000000, Limit: 0xFFFFF, Present, Ring 0, Data/Write
+    ; Base: 0x00000000, Limit: 0xFFFFF (4GB with 4K pages)
+    ; Present=1, DPL=00 (ring 0), Type=0 (data)
+    ; Writable=1, Access=1
+    ; Granularity=1 (4K), Default=1 (32-bit)
+    ; Binary: 00CF 9200 0000 FFFF
     dq 0x00CF92000000FFFF
 
 gdt_end:
 
+; === GDT Descriptor for LGDT instruction ===
 gdt_descriptor:
-    dw GDT_LIMIT                    ; GDT limit
-    dd gdt_start                    ; GDT base address
+    dw GDT_LIMIT                    ; Size of GDT minus 1
+    dd gdt_start                    ; Base address of GDT
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; INTERRUPT DESCRIPTOR TABLE (IDT) - Temporary, minimal
+; PADDING & ALIGNMENT
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-align 8
-idt_start:
-    times 256 dq 0                  ; 256 null IDT entries (placeholder)
-idt_end:
+; Align to 512-byte boundary (standard sector size)
+align 512, db 0
 
-idt_descriptor:
-    dw IDT_LIMIT                    ; IDT limit
-    dd idt_start                    ; IDT base address
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; PADDING TO FILL STAGE 4 BLOCK
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-; Pad to 512 bytes (standard bootloader sector size)
-; In practice, you may want a larger stage 4
-align 512
+; End marker
 stage4_end:
-
-; Signature for bootloader validation (optional)
-db 0x55, 0xAA                       ; Boot signature at end of sector
+    db 0x55, 0xAA                   ; Boot signature (optional for stage 4)
