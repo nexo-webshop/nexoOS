@@ -11,6 +11,3 @@ as we are moving this development to something else. we will direct you to NexoO
 Bootloader (0.00.00.03)
 
 # ENJOY!
-
-# the size of our OS:
-- 29KB
