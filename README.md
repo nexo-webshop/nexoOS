@@ -8,6 +8,7 @@ this OS is as most as possible based on python. it can contain many bugs as the 
 # EVERY WEEK SEVERAL UPDATES!
 # latest update (21/3/2026)
 build 000.004
+- in this build we did a big bugfix update so we can get further with the next step to make this OS work!
 Bootloader (0.00.00.04):
 - fixed a bug where the video mode was undefined
 - fixed a bug where there was screen content garbage
