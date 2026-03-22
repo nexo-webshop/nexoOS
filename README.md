@@ -10,6 +10,7 @@ as we are moving this development to something else. we will direct you to NexoO
 # latest update (22/3/2026)
 build 000.006
 - in this build we did a big bugfix update so we can get further with the next step to make this OS work!
+- new file: bootloader-stage-4.asm (assembly)
 Bootloader (0.00.00.05):
 - fixed a bug where the CPUID flag check was wrong
 - fixed a bug where the position of the cursor wasn't saved after reading
@@ -36,7 +37,9 @@ Bootloader stage 3 (0.00.00.02)
 - fixed a bug where there was stack overlap risk
 
 Bootloader stage 4 (0.00.00.01)
-- initial release
+- fixed a bug where there was no kernel jump
+- fixed a bug where there was no kernel load
+- fixed a bug where there was no protected mode
 # ENJOY!
 
 # the size of our OS:
