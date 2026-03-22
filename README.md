@@ -7,7 +7,7 @@ this OS is as most as possible based on python. it can contain many bugs as the 
 - 100% assembly
 # EVERY WEEK SEVERAL UPDATES!
 # latest update (22/3/2026)
-build 000.004
+build 000.005
 - in this build we did a big bugfix update so we can get further with the next step to make this OS work!
 Bootloader (0.00.00.05):
 - fixed a bug where the CPUID flag check was wrong
