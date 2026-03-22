@@ -9,13 +9,12 @@ this OS is as most as possible based on python. it can contain many bugs as the 
 # latest update (21/3/2026)
 build 000.004
 - in this build we did a big bugfix update so we can get further with the next step to make this OS work!
-Bootloader (0.00.00.04):
-- fixed a bug where the video mode was undefined
-- fixed a bug where there was screen content garbage
-- fixed a bug where the newline handling was broken
-- fixed a bug where CPUID crashed at old CPU's
-- fixed a bug where the BPB was missing
-- fixed a bug where the cursor wasn't initialized
+Bootloader (0.00.00.05):
+- fixed a bug where the CPUID flag check was wrong
+- fixed a bug where the position of the cursor wasn't saved after reading
+- fixed a bug where the video mode check 0x0003 was missing
+- fixed a bug where Stack SP = 0x7C00, this was border dangerous
+- fixed a bug where DS was not garanteed for string operations
 
 Bootloader stage 2 (0.00.00.02)
 - fixed a bug where the A20 line had an infinite timeout
