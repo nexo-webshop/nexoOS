@@ -36,7 +36,7 @@ Bootloader stage 3 (0.00.00.02)
 - fixed a bug where there was no IDT setup
 - fixed a bug where there was stack overlap risk
 
-Bootloader stage 4 (0.00.00.01)
+Bootloader stage 4 (0.00.00.02)
 - fixed a bug where there was no kernel jump
 - fixed a bug where there was no kernel load
 - fixed a bug where there was no protected mode
