@@ -24,8 +24,16 @@ Bootloader stage 2 (0.00.00.03)
 - fixed a bug where there was cursor wrapping
 - fixed a bug with memory storage
 
-Bootloader stage 3 (0.00.00.01)
-- initial release
+Bootloader stage 3 (0.00.00.02)
+- fixed a bug where the LBA to CHS was completely wrong
+- fixed a bug where the A20 keyboard fallback could take infinite time
+- fixed a bug where the kernel load was not in the CPU but in the GPU
+- fixed a bug where ES:BX was not corrently for 0x100000
+- fixed a bug where GDT description byte 6 was wrong
+- fixed a bug where the kernel jump was unsafe
+- fixed a bug where there was no IDT setup
+- fixed a bug where there was stack overlap risk
+
 # ENJOY!
 
 # the size of our OS:
