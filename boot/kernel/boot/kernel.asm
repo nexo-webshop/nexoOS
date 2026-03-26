@@ -1,12 +1,8 @@
-bits 16
-org 0x1000
-
-start:
-    mov ah, 0x0E
-    mov al, 'K'
-    int 0x10
+kernel_main:
+    mov byte [0xB8000], 'N'
+    mov byte [0xB8001], 0x07
 
 hang:
     jmp hang
 
-; if you see an 'K': kernel works!
+; if you see an 'N': kernel works!
