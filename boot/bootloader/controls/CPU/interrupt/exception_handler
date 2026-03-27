@@ -1,9 +1,0 @@
-isr_handler:
-
-    mov edi, 0xB8000
-    mov ax, 0x0745          ; 'E'
-    mov [edi], ax
-
-.hang:
-    hlt
-    jmp .hang
