@@ -3,44 +3,27 @@ global kernel_main
 
 kernel_main:
 
-    cli                         ; 🔥 interrupts uit (geen IDT nog)
+    cli                         ; geen interrupts tijdens init
 
-; ----------------
-; SEGMENTS RESET (BELANGRIJK)
-; ----------------
-    mov ax, 0x10                ; data segment selector
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
+; ================================
+; CORE INIT
+; ================================
+    call init_segments
+    call init_stack
+    call init_idt
+    call init_timer
+    call init_keyboard
+    call init_vga
 
-; ----------------
-; STACK (VEILIG + ALIGNED)
-; ----------------
-    mov esp, 0x90000
-    and esp, 0xFFFFFFF0
+    sti                         ; 🔥 interrupts AAN
 
-    cld                         ; string ops safety
+; ================================
+; MAIN LOOP
+; ================================
+main_loop:
 
-; ----------------
-; VGA TEXT MODE WRITE
-; ----------------
-    mov edi, 0xB8000            ; VGA buffer
-    mov al, 'N'
-    mov ah, 0x07                ; lichtgrijs op zwart
-    mov [edi], ax
+    call update
+    call render
 
-; ----------------
-; DEBUG: meerdere chars (optioneel)
-; ----------------
-    mov word [edi+2], 0x0745    ; 'E'
-    mov word [edi+4], 0x0758    ; 'X'
-    mov word [edi+6], 0x074F    ; 'O'
-
-; ----------------
-; HALT LOOP (CPU vriendelijk)
-; ----------------
-.hang:
-    hlt
-    jmp .hang
+    hlt                         ; CPU efficiënt
+    jmp main_loop
